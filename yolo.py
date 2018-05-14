@@ -20,15 +20,15 @@ from yolo3.utils import letterbox_image
 
 class YOLO(object):
     def __init__(self):
-        self.model_path = 'model_data/yolo.h5'
-        self.anchors_path = 'model_data/yolo_anchors.txt'
-        self.classes_path = 'model_data/coco_classes.txt'
+        self.model_path = 'model_data/logo.h5'
+        self.anchors_path = 'model_data/logo_anchors.txt'
+        self.classes_path = 'model_data/logo_classes.txt'
         self.score = 0.3
         self.iou = 0.5
         self.class_names = self._get_class()
         self.anchors = self._get_anchors()
         self.sess = K.get_session()
-        self.model_image_size = (416, 416) # fixed size or (None, None)
+        self.model_image_size = (608, 608) # fixed size or (None, None)
         self.is_fixed_size = self.model_image_size != (None, None)
         self.boxes, self.scores, self.classes = self.generate()
 
@@ -47,11 +47,22 @@ class YOLO(object):
             anchors = np.array(anchors).reshape(-1, 2)
         return anchors
 
+    def savebbox(self, boxes, classes, scores, savebbox_path):
+        with open(savebbox_path, 'w') as f:
+            f.write('%d\n' % len(boxes))
+            for i, c in reversed(list(enumerate(classes))):
+                predicted_class = self.class_names[c]
+                box = ' '.join(map(str, boxes[i].astype('int32')))
+                score = scores[i]
+                f.write(' '.join((box, predicted_class, '{:.4f}'.format(score))) + '\n')
+        print('Image %s saved' % (savebbox_path))
+
     def generate(self):
         model_path = os.path.expanduser(self.model_path)
         assert model_path.endswith('.h5'), 'Keras model must be a .h5 file.'
 
         self.yolo_model = load_model(model_path, compile=False)
+        print(self.yolo_model.summary())
         print('{} model, anchors, and classes loaded.'.format(model_path))
 
         # Generate colors for drawing bounding boxes.
@@ -72,7 +83,7 @@ class YOLO(object):
                 score_threshold=self.score, iou_threshold=self.iou)
         return boxes, scores, classes
 
-    def detect_image(self, image):
+    def detect_image(self, image, imagefile):
         start = time.time()
 
         if self.is_fixed_size:
@@ -102,6 +113,10 @@ class YOLO(object):
         font = ImageFont.truetype(font='font/FiraMono-Medium.otf',
                     size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
         thickness = (image.size[0] + image.size[1]) // 300
+
+        head, tail = os.path.split(imagefile)
+        savebbox_path = str('output/%s.txt' % (tail.split('.')[0]))
+        self.savebbox(out_boxes, out_classes, out_scores, savebbox_path)
 
         for i, c in reversed(list(enumerate(out_classes))):
             predicted_class = self.class_names[c]
@@ -141,6 +156,8 @@ class YOLO(object):
 
     def close_session(self):
         self.sess.close()
+
+
 
 
 def detect_video(yolo, video_path):
@@ -184,7 +201,7 @@ def detect_img(yolo):
             print('Open Error! Try again!')
             continue
         else:
-            r_image = yolo.detect_image(image)
+            r_image = yolo.detect_image(image, img)
             r_image.show()
     yolo.close_session()
 
